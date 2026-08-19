@@ -1,89 +1,70 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const path = require("path");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
+// 1. Middleware
 app.use(cors());
 app.use(express.json());
 
+// 2. Serve Static Frontend Files (HTML, CSS, JS) from frontend folder
+app.use(express.static(path.join(__dirname, "../frontend")));
+
+// 3. Initialize Gemini AI
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
-  console.error("FATAL: GEMINI_API_KEY is missing in your .env file.");
-  process.exit(1);
+  console.warn("⚠️ Warning: GEMINI_API_KEY is not set.");
 }
+const genAI = new GoogleGenerativeAI(apiKey || "");
 
-const genAI = new GoogleGenerativeAI(apiKey);
-
-// Fast low-latency model pool
-const fastModel = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash-8b",
-  generationConfig: {
-    maxOutputTokens: 250,
-    temperature: 0.1,
-  },
-});
-
-const backupModel = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
-  generationConfig: {
-    maxOutputTokens: 250,
-    temperature: 0.1,
-  },
-});
-
-// Emergency questions in case daily quotas are reached
-const emergencyQuestions = [
-  "Good attempt. Can you explain how you would optimize database queries and handle connection pooling in a high-concurrency Node.js service?",
-  "Understood. Moving to the next technical topic: Explain how B-Tree indexes work under the hood in databases and when an index degrades write performance.",
-  "Let's move forward: How do you design and secure a distributed caching strategy using Redis to prevent cache stampedes?",
-  "Well stated. How do you handle race conditions and cancel pending asynchronous requests on the frontend using AbortController?"
-];
-let fallbackIdx = 0;
-
-async function getFastResponse(promptText) {
+// 4. API Endpoint for Interview & Mentor Chat
+app.post("/api/interview", async (req, res) => {
   try {
-    const result = await fastModel.generateContent(promptText);
-    const response = await result.response;
-    return response.text();
-  } catch (primaryErr) {
-    console.warn("Primary 8b model busy, switching to backup flash model...");
-    try {
-      const backupResult = await backupModel.generateContent(promptText);
-      const backupResponse = await backupResult.response;
-      return backupResponse.text();
-    } catch (backupErr) {
-      console.warn("Quota reached or server busy. Using offline fallback response...");
-      const q = emergencyQuestions[fallbackIdx % emergencyQuestions.length];
-      fallbackIdx++;
-      return `Evaluation noted. Next Question: ${q}`;
+    const { prompt, history } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({ error: "A prompt is required." });
     }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    let contextText = "";
+    if (Array.isArray(history) && history.length > 0) {
+      contextText =
+        "Previous conversation context:\n" +
+        history
+          .map(
+            (msg) =>
+              `${msg.role === "user" ? "Candidate" : "Interviewer/Mentor"}: ${msg.content}`
+          )
+          .join("\n") +
+        "\n\nCurrent Task:\n";
+    }
+
+    const fullPrompt = contextText + prompt;
+    const result = await model.generateContent(fullPrompt);
+    const responseText = result.response.text();
+
+    return res.json({ response: responseText });
+  } catch (error) {
+    console.error("Gemini API Error:", error);
+    return res.status(500).json({
+      error: "Failed to generate AI response",
+      details: error.message,
+    });
   }
-}
-
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
 });
 
-app.post('/api/interview', async (req, res) => {
-  const { prompt, history, answer, message } = req.body;
-  const inputPayload = prompt || answer || message || (history ? JSON.stringify(history) : "Hello, let's begin.");
-
-  const aiText = await getFastResponse(inputPayload);
-
-  return res.status(200).json({
-    success: true,
-    response: aiText,
-    message: aiText,
-    text: aiText
-  });
+// 5. Fallback Route: Serve index.html for any other route
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../frontend", "index.html"));
 });
 
-app.listen(PORT, () => {
-  console.log(`\n==============================================`);
-  console.log(`  Fast Interview Backend Running on Port ${PORT}`);
-  console.log(`  Endpoint: http://localhost:${PORT}/api/interview`);
-  console.log(`==============================================\n`);
+// 6. Start Server on dynamic Port
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
