@@ -9,26 +9,24 @@ interface Message {
 
 interface FinalReport {
   score: number;
-  verdict: string;
-  feedback: string;
+  summary: string;
 }
 
+const BACKEND_URL = "https://mock-interview-bot-b57o.onrender.com/api/interview";
+
 export default function MockInterviewApp() {
-  // Main interview configuration
   const [topic, setTopic] = useState("DSA (Data Structures & Algorithms)");
-  const [difficulty, setDifficulty] = useState("Intermediate");
+  const [difficulty, setDifficulty] = useState("Junior / Entry-Level");
   const [totalQuestions, setTotalQuestions] = useState(3);
   const [isInterviewStarted, setIsInterviewStarted] = useState(false);
-  const [isInterviewFinished, setIsInterviewFinished] = useState(false);
+  const [isFinished, setIsFinished] = useState(false);
 
-  // Main interview chat state
   const [messages, setMessages] = useState<Message[]>([]);
   const [userInput, setUserInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(1);
-  const [finalReport, setFinalReport] = useState<FinalReport | null>(null);
+  const [report, setReport] = useState<FinalReport | null>(null);
 
-  // Side Doubt Drawer state
   const [isDoubtDrawerOpen, setIsDoubtDrawerOpen] = useState(false);
   const [doubtMessages, setDoubtMessages] = useState<Message[]>([
     {
@@ -51,49 +49,43 @@ export default function MockInterviewApp() {
     doubtEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [doubtMessages, isDoubtLoading, isDoubtDrawerOpen]);
 
-  // Client-side gibberish detection
-  const isGibberish = (text: string) => {
-    const clean = text.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const isNonsense = (str: string) => {
+    const clean = str.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
     if (clean.length < 5) return true;
-    const uniqueChars = new Set(clean.split(""));
-    return uniqueChars.size < 4;
+    const unique = new Set(clean.split(""));
+    return unique.size < 4;
   };
 
-  // 1. Start Main Interview
   const handleStartInterview = async () => {
     setIsInterviewStarted(true);
-    setIsInterviewFinished(false);
+    setIsFinished(false);
     setIsLoading(true);
     setCurrentQuestionIndex(1);
-    setFinalReport(null);
+    setReport(null);
 
-    const initPrompt = `Start a technical mock interview on the topic: ${topic}. Difficulty: ${difficulty}. Directly ask Question 1 of ${totalQuestions}. Do not provide introductory conversational filler.`;
+    const initPrompt = `Start a technical mock interview on the topic: ${topic}. Difficulty: ${difficulty}. Directly ask Question 1 of ${totalQuestions} without introductory fluff.`;
 
     try {
-      const res = await fetch("/api/interview", {
+      const res = await fetch(BACKEND_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: initPrompt,
-          topic,
-          difficulty,
-        }),
+        body: JSON.stringify({ prompt: initPrompt, topic, difficulty }),
       });
       const data = await res.json();
-
       setMessages([
         {
           role: "bot",
           content:
             data.response ||
-            `Welcome to your ${topic} technical interview. Let's begin! Question 1: Can you explain the time and space complexity trade-offs between a Hash Map and a Balanced Binary Search Tree?`,
+            data.message ||
+            `Welcome to your ${topic} interview! Question 1: How do you find the middle element of a singly linked list in a single pass?`,
         },
       ]);
     } catch {
       setMessages([
         {
           role: "bot",
-          content: `Welcome to your ${topic} technical interview. Question 1: How do you detect and break a cycle in a singly linked list?`,
+          content: `Welcome to your ${topic} interview! Question 1: How do you find the middle element of a singly linked list in a single pass?`,
         },
       ]);
     } finally {
@@ -101,15 +93,14 @@ export default function MockInterviewApp() {
     }
   };
 
-  // 2. Submit Main Interview Answer
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!userInput.trim() || isLoading) return;
 
     const userText = userInput.trim();
 
-    if (isGibberish(userText)) {
-      alert("Invalid answer detected. Please enter a meaningful technical explanation.");
+    if (isNonsense(userText)) {
+      alert("Invalid answer detected. Please provide a substantive technical response.");
       return;
     }
 
@@ -117,20 +108,23 @@ export default function MockInterviewApp() {
       ...messages,
       { role: "user", content: userText },
     ];
-
     setMessages(updatedMessages);
     setUserInput("");
     setIsLoading(true);
 
-    const isLast = currentQuestionIndex >= totalQuestions;
+    const isLastTurn = currentQuestionIndex >= totalQuestions;
 
-    const payloadPrompt = isLast
-      ? `Topic: ${topic}. Difficulty: ${difficulty}. Candidate final answer: "${userText}". 
-         The interview is complete. Evaluate this answer in 1 sentence. Then provide a concise performance report with an overall score out of 100, strengths, and areas for improvement.`
-      : `Topic: ${topic}. Difficulty: ${difficulty}. Candidate Answer: "${userText}". Evaluate critically in 1-2 concise sentences (point out inaccuracies). Then give Question ${currentQuestionIndex + 1} of ${totalQuestions}.`;
+    const payloadPrompt = isLastTurn
+      ? `Topic: ${topic}. Difficulty: ${difficulty}. Candidate Final Answer: "${userText}". 
+         The interview is complete. Provide a strict evaluation report:
+         1. Turn evaluation (1-2 sentences).
+         2. Overall score out of 100 based on technical accuracy.
+         3. Top 2 actionable areas for improvement.`
+      : `Topic: ${topic}. Difficulty: ${difficulty}. Candidate Answer: "${userText}". 
+         Evaluate this answer honestly in 1-2 sentences (point out inaccuracies). Then provide Question ${currentQuestionIndex + 1} of ${totalQuestions} strictly relevant to ${topic}.`;
 
     try {
-      const res = await fetch("/api/interview", {
+      const res = await fetch(BACKEND_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -142,38 +136,35 @@ export default function MockInterviewApp() {
       });
 
       const data = await res.json();
-      const botResponse = data.response || "Evaluation noted.";
+      const botResponse = data.response || data.message || "Evaluation noted.";
 
       setMessages((prev) => [...prev, { role: "bot", content: botResponse }]);
 
-      if (isLast) {
-        setIsInterviewFinished(true);
-        setFinalReport({
-          score: 82,
-          verdict: "Ready for Technical Screen",
-          feedback: botResponse,
+      if (isLastTurn) {
+        setIsFinished(true);
+        setReport({
+          score: 80,
+          summary: botResponse,
         });
       } else {
         setCurrentQuestionIndex((prev) => prev + 1);
       }
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "bot",
-          content: isLast
-            ? "Session Complete! Review your answers above for improvement opportunities."
-            : "Next Question: Can you explain the difference between BFS and DFS?",
-        },
-      ]);
-      if (isLast) setIsInterviewFinished(true);
-      else setCurrentQuestionIndex((prev) => prev + 1);
+      const fallback = isLastTurn
+        ? "Interview completed! Great effort across all questions."
+        : "Evaluation noted. Next Question: What is the time complexity difference between an Array and a Linked List for search and insertion?";
+      setMessages((prev) => [...prev, { role: "bot", content: fallback }]);
+      if (isLastTurn) {
+        setIsFinished(true);
+        setReport({ score: 75, summary: fallback });
+      } else {
+        setCurrentQuestionIndex((prev) => prev + 1);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 3. Side Doubt Submission
   const handleSendDoubt = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!doubtInput.trim() || isDoubtLoading) return;
@@ -184,29 +175,23 @@ export default function MockInterviewApp() {
     setDoubtInput("");
     setIsDoubtLoading(true);
 
-    const mentorPrompt = `
-You are a senior technical mentor assisting a student in ${topic} (${difficulty}).
-Student doubt / improvement question: "${text}"
-
-Provide:
-1. A clear, direct explanation or optimal code example.
-2. 2 concrete actionable tips on how they can improve.
-Keep your response structured, practical, and under 150 words.
-    `.trim();
+    const mentorPrompt = `You are a Senior Technical Mentor. The student is practicing ${topic} (${difficulty}). Doubt: "${text}". Give an accurate, concise explanation with edge cases under 120 words.`;
 
     try {
-      const res = await fetch("/api/interview", {
+      const res = await fetch(BACKEND_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: mentorPrompt, topic, difficulty }),
       });
       const data = await res.json();
-      const answer = data.response || "Focus on edge cases and optimal data structures.";
-      setDoubtMessages((prev) => [...prev, { role: "bot", content: answer }]);
+      setDoubtMessages((prev) => [
+        ...prev,
+        { role: "bot", content: data.response || data.message || "Focus on identifying constraints and edge cases early." },
+      ]);
     } catch {
       setDoubtMessages((prev) => [
         ...prev,
-        { role: "bot", content: "State the brute-force complexity first, then optimize." },
+        { role: "bot", content: "Always check time and space constraints before choosing your data structure." },
       ]);
     } finally {
       setIsDoubtLoading(false);
@@ -215,11 +200,11 @@ Keep your response structured, practical, and under 150 words.
 
   const handleRestart = () => {
     setIsInterviewStarted(false);
-    setIsInterviewFinished(false);
+    setIsFinished(false);
     setMessages([]);
     setUserInput("");
     setCurrentQuestionIndex(1);
-    setFinalReport(null);
+    setReport(null);
   };
 
   return (
@@ -276,20 +261,17 @@ Keep your response structured, practical, and under 150 words.
             Start Interview
           </button>
         </div>
-      ) : isInterviewFinished ? (
+      ) : isFinished ? (
         <div style={styles.setupCard}>
-          <h1 style={{ ...styles.setupTitle, color: "#3fb950" }}>Session Completed!</h1>
-          <p style={styles.setupSubtitle}>Here is your comprehensive evaluation breakdown:</p>
+          <h1 style={{ ...styles.setupTitle, color: "#3fb950" }}>Interview Evaluation Report</h1>
+          <p style={styles.setupSubtitle}>Your session is finished. Here is your performance overview:</p>
           <div style={styles.reportBox}>
-            <div style={styles.reportScore}>
-              Score: <span style={{ color: "#58a6ff" }}>{finalReport?.score ?? 80}/100</span>
-            </div>
             <div style={{ color: "#c9d1d9", fontSize: "14px", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>
-              {finalReport?.feedback}
+              {report?.summary}
             </div>
           </div>
           <button onClick={handleRestart} style={styles.startButton}>
-            Start New Interview
+            Start New Round
           </button>
         </div>
       ) : (
@@ -366,7 +348,6 @@ Keep your response structured, practical, and under 150 words.
         </div>
       )}
 
-      {/* Side Mentor Drawer */}
       <button
         onClick={() => setIsDoubtDrawerOpen((prev) => !prev)}
         style={styles.floatingButton}
@@ -379,9 +360,9 @@ Keep your response structured, practical, and under 150 words.
           <div style={styles.drawerCard}>
             <div style={styles.drawerHeader}>
               <div>
-                <strong style={{ color: "#58a6ff" }}>💡 Technical Mentor</strong>
+                <strong style={{ color: "#58a6ff" }}>💡 Doubt & Improvement Mentor</strong>
                 <div style={{ fontSize: "12px", color: "#8b949e" }}>
-                  Ask questions, code solutions, or concepts
+                  Ask questions, code solutions, or how to improve
                 </div>
               </div>
               <button
@@ -428,7 +409,7 @@ Keep your response structured, practical, and under 150 words.
             <form onSubmit={handleSendDoubt} style={styles.drawerInputArea}>
               <input
                 type="text"
-                placeholder="Ask any doubt or concept..."
+                placeholder="Ask any doubt or how to improve..."
                 value={doubtInput}
                 onChange={(e) => setDoubtInput(e.target.value)}
                 disabled={isDoubtLoading}
@@ -523,13 +504,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: "8px",
     padding: "18px",
     marginBottom: "20px",
-    maxHeight: "350px",
+    maxHeight: "380px",
     overflowY: "auto",
-  },
-  reportScore: {
-    fontSize: "18px",
-    fontWeight: "700",
-    marginBottom: "12px",
   },
   chatCard: {
     backgroundColor: "#161b22",
