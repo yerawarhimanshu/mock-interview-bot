@@ -91,7 +91,8 @@ RULES YOU MUST FOLLOW:
 });
 
 // 5. Fallback Route: Serve index.html for any other route
-app.get("(.*)", (req, res) => {
+// 5. Fallback Route: Serve index.html for any other route
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, "../frontend", "index.html"));
 });
 
