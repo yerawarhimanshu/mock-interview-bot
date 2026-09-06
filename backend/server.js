@@ -2,7 +2,8 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const fs = require("fs");
+const Groq = require("groq-sdk");
 
 const app = express();
 
@@ -10,15 +11,18 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 2. Serve Static Frontend Files from frontend folder
-app.use(express.static(path.join(__dirname, "../frontend")));
-
-// 3. Initialize Gemini AI
-const apiKey = process.env.GEMINI_API_KEY;
-if (!apiKey) {
-  console.warn("⚠️ Warning: GEMINI_API_KEY is not set.");
+// 2. Serve Static Frontend Files (only if directory exists)
+const frontendPath = path.join(__dirname, "../frontend");
+if (fs.existsSync(frontendPath)) {
+  app.use(express.static(frontendPath));
 }
-const genAI = new GoogleGenerativeAI(apiKey || "");
+
+// 3. Initialize Groq Client
+const apiKey = process.env.GROQ_API_KEY;
+if (!apiKey) {
+  console.warn("⚠️ Warning: GROQ_API_KEY is not set.");
+}
+const groq = new Groq({ apiKey: apiKey || "" });
 
 // 4. API Endpoint for Interview & Mentor Chat
 app.post("/api/interview", async (req, res) => {
@@ -32,7 +36,6 @@ app.post("/api/interview", async (req, res) => {
     const currentTopic = topic || "the selected technical topic";
     const currentDifficulty = difficulty || "Intermediate";
 
-    // System instructions enforcing strict technical evaluation & topic lock
     const systemInstruction = `
 You are a rigorous, professional technical interviewer.
 Current Session Details:
@@ -58,31 +61,32 @@ RULES YOU MUST FOLLOW:
    After your brief critique, clearly present the next question for the candidate.
 `;
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: systemInstruction,
-    });
+    const messages = [{ role: "system", content: systemInstruction }];
 
-    let contextText = "";
     if (Array.isArray(history) && history.length > 0) {
-      contextText =
-        "Previous conversation context:\n" +
-        history
-          .map(
-            (msg) =>
-              `${msg.role === "user" ? "Candidate" : "Interviewer/Mentor"}: ${msg.content}`
-          )
-          .join("\n") +
-        "\n\nCurrent Task:\n";
+      history.forEach((msg) => {
+        messages.push({
+          role: msg.role === "user" ? "user" : "assistant",
+          content: msg.content,
+        });
+      });
     }
 
-    const fullPrompt = contextText + prompt;
-    const result = await model.generateContent(fullPrompt);
-    const responseText = result.response.text();
+    messages.push({ role: "user", content: prompt });
+
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: messages,
+      temperature: 0.7,
+      max_tokens: 1024,
+    });
+
+    const responseText =
+      completion.choices[0]?.message?.content || "No response generated.";
 
     return res.json({ response: responseText });
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("Groq API Error:", error);
     return res.status(500).json({
       error: "Failed to generate AI response",
       details: error.message,
@@ -90,13 +94,17 @@ RULES YOU MUST FOLLOW:
   }
 });
 
-// 5. Fallback Route: Serve index.html for any other route
-// 5. Fallback Route: Serve index.html for any other route
+// 5. Fallback Route
 app.use((req, res) => {
-  res.sendFile(path.join(__dirname, "../frontend", "index.html"));
+  const indexPath = path.join(__dirname, "../frontend", "index.html");
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(200).send("API server is running.");
+  }
 });
 
-// 6. Start Server on dynamic Port
+// 6. Start Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
