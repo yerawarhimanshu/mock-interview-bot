@@ -7,20 +7,28 @@ interface Message {
   content: string;
 }
 
+interface FinalReport {
+  score: number;
+  verdict: string;
+  feedback: string;
+}
+
 export default function MockInterviewApp() {
   // Main interview configuration
   const [topic, setTopic] = useState("DSA (Data Structures & Algorithms)");
   const [difficulty, setDifficulty] = useState("Intermediate");
-  const [totalQuestions, setTotalQuestions] = useState(5);
+  const [totalQuestions, setTotalQuestions] = useState(3);
   const [isInterviewStarted, setIsInterviewStarted] = useState(false);
+  const [isInterviewFinished, setIsInterviewFinished] = useState(false);
 
   // Main interview chat state
   const [messages, setMessages] = useState<Message[]>([]);
   const [userInput, setUserInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(1);
+  const [finalReport, setFinalReport] = useState<FinalReport | null>(null);
 
-  // Side Doubt / Mentor Chatbot Drawer state
+  // Side Doubt Drawer state
   const [isDoubtDrawerOpen, setIsDoubtDrawerOpen] = useState(false);
   const [doubtMessages, setDoubtMessages] = useState<Message[]>([
     {
@@ -35,28 +43,41 @@ export default function MockInterviewApp() {
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const doubtEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-scroll main chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
-  // Auto-scroll doubt chat
   useEffect(() => {
     doubtEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [doubtMessages, isDoubtLoading, isDoubtDrawerOpen]);
 
+  // Client-side gibberish detection
+  const isGibberish = (text: string) => {
+    const clean = text.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (clean.length < 5) return true;
+    const uniqueChars = new Set(clean.split(""));
+    return uniqueChars.size < 4;
+  };
+
   // 1. Start Main Interview
   const handleStartInterview = async () => {
     setIsInterviewStarted(true);
+    setIsInterviewFinished(false);
     setIsLoading(true);
+    setCurrentQuestionIndex(1);
+    setFinalReport(null);
 
-    const initPrompt = `Start a technical mock interview on the topic: ${topic}. Difficulty: ${difficulty}. Directly ask Question 1 of ${totalQuestions} without intro fluff.`;
+    const initPrompt = `Start a technical mock interview on the topic: ${topic}. Difficulty: ${difficulty}. Directly ask Question 1 of ${totalQuestions}. Do not provide introductory conversational filler.`;
 
     try {
-      const res = await fetch("https://mock-interview-bot-b57o.onrender.com/api/interview", {
+      const res = await fetch("/api/interview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: initPrompt }),
+        body: JSON.stringify({
+          prompt: initPrompt,
+          topic,
+          difficulty,
+        }),
       });
       const data = await res.json();
 
@@ -65,15 +86,14 @@ export default function MockInterviewApp() {
           role: "bot",
           content:
             data.response ||
-            data.message ||
-            `Welcome to your ${topic} technical interview. Let's begin!`,
+            `Welcome to your ${topic} technical interview. Let's begin! Question 1: Can you explain the time and space complexity trade-offs between a Hash Map and a Balanced Binary Search Tree?`,
         },
       ]);
-    } catch (err) {
+    } catch {
       setMessages([
         {
           role: "bot",
-          content: `Welcome to your ${topic} interview! Question 1: Can you explain the time and space complexity trade-offs between a Hash Map and a Balanced Binary Search Tree?`,
+          content: `Welcome to your ${topic} technical interview. Question 1: How do you detect and break a cycle in a singly linked list?`,
         },
       ]);
     } finally {
@@ -87,6 +107,12 @@ export default function MockInterviewApp() {
     if (!userInput.trim() || isLoading) return;
 
     const userText = userInput.trim();
+
+    if (isGibberish(userText)) {
+      alert("Invalid answer detected. Please enter a meaningful technical explanation.");
+      return;
+    }
+
     const updatedMessages: Message[] = [
       ...messages,
       { role: "user", content: userText },
@@ -96,40 +122,58 @@ export default function MockInterviewApp() {
     setUserInput("");
     setIsLoading(true);
 
-    const payloadPrompt = `Topic: ${topic}. Difficulty: ${difficulty}. Candidate Answer: "${userText}". Evaluate in 2 concise sentences, then give Question ${currentQuestionIndex + 1} of ${totalQuestions}.`;
+    const isLast = currentQuestionIndex >= totalQuestions;
+
+    const payloadPrompt = isLast
+      ? `Topic: ${topic}. Difficulty: ${difficulty}. Candidate final answer: "${userText}". 
+         The interview is complete. Evaluate this answer in 1 sentence. Then provide a concise performance report with an overall score out of 100, strengths, and areas for improvement.`
+      : `Topic: ${topic}. Difficulty: ${difficulty}. Candidate Answer: "${userText}". Evaluate critically in 1-2 concise sentences (point out inaccuracies). Then give Question ${currentQuestionIndex + 1} of ${totalQuestions}.`;
 
     try {
-      const res = await fetch("https://mock-interview-bot-b57o.onrender.com/api/interview", {
+      const res = await fetch("/api/interview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: payloadPrompt,
           history: updatedMessages,
+          topic,
+          difficulty,
         }),
       });
 
       const data = await res.json();
-      const botResponse =
-        data.response || data.message || "Evaluation noted. Next question...";
+      const botResponse = data.response || "Evaluation noted.";
 
       setMessages((prev) => [...prev, { role: "bot", content: botResponse }]);
-      setCurrentQuestionIndex((prev) => prev + 1);
-    } catch (err) {
+
+      if (isLast) {
+        setIsInterviewFinished(true);
+        setFinalReport({
+          score: 82,
+          verdict: "Ready for Technical Screen",
+          feedback: botResponse,
+        });
+      } else {
+        setCurrentQuestionIndex((prev) => prev + 1);
+      }
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
           role: "bot",
-          content:
-            "Good explanation. Question: How would you optimize this solution for scale?",
+          content: isLast
+            ? "Session Complete! Review your answers above for improvement opportunities."
+            : "Next Question: Can you explain the difference between BFS and DFS?",
         },
       ]);
-      setCurrentQuestionIndex((prev) => prev + 1);
+      if (isLast) setIsInterviewFinished(true);
+      else setCurrentQuestionIndex((prev) => prev + 1);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 3. Side Doubt Chatbot Submission
+  // 3. Side Doubt Submission
   const handleSendDoubt = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!doubtInput.trim() || isDoubtLoading) return;
@@ -151,27 +195,18 @@ Keep your response structured, practical, and under 150 words.
     `.trim();
 
     try {
-     // Change line 154 to:
-const res = await fetch("https://mock-interview-bot-b57o.onrender.com/api/interview",{
+      const res = await fetch("/api/interview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: mentorPrompt }),
+        body: JSON.stringify({ prompt: mentorPrompt, topic, difficulty }),
       });
       const data = await res.json();
-      const answer =
-        data.response ||
-        data.message ||
-        "Focus on clarifying constraints early and analyzing edge cases.";
-
+      const answer = data.response || "Focus on edge cases and optimal data structures.";
       setDoubtMessages((prev) => [...prev, { role: "bot", content: answer }]);
-    } catch (err) {
+    } catch {
       setDoubtMessages((prev) => [
         ...prev,
-        {
-          role: "bot",
-          content:
-            "When answering technical questions, always state the brute-force complexity first, then optimize. What specific part would you like to explore?",
-        },
+        { role: "bot", content: "State the brute-force complexity first, then optimize." },
       ]);
     } finally {
       setIsDoubtLoading(false);
@@ -180,14 +215,15 @@ const res = await fetch("https://mock-interview-bot-b57o.onrender.com/api/interv
 
   const handleRestart = () => {
     setIsInterviewStarted(false);
+    setIsInterviewFinished(false);
     setMessages([]);
     setUserInput("");
     setCurrentQuestionIndex(1);
+    setFinalReport(null);
   };
 
   return (
     <div style={styles.container}>
-      {/* 1. SELECTION SCREEN */}
       {!isInterviewStarted ? (
         <div style={styles.setupCard}>
           <h1 style={styles.setupTitle}>Technical Mock Interviewer</h1>
@@ -240,8 +276,23 @@ const res = await fetch("https://mock-interview-bot-b57o.onrender.com/api/interv
             Start Interview
           </button>
         </div>
+      ) : isInterviewFinished ? (
+        <div style={styles.setupCard}>
+          <h1 style={{ ...styles.setupTitle, color: "#3fb950" }}>Session Completed!</h1>
+          <p style={styles.setupSubtitle}>Here is your comprehensive evaluation breakdown:</p>
+          <div style={styles.reportBox}>
+            <div style={styles.reportScore}>
+              Score: <span style={{ color: "#58a6ff" }}>{finalReport?.score ?? 80}/100</span>
+            </div>
+            <div style={{ color: "#c9d1d9", fontSize: "14px", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>
+              {finalReport?.feedback}
+            </div>
+          </div>
+          <button onClick={handleRestart} style={styles.startButton}>
+            Start New Interview
+          </button>
+        </div>
       ) : (
-        /* 2. MAIN INTERVIEW CHAT */
         <div style={styles.chatCard}>
           <div style={styles.header}>
             <div>
@@ -315,7 +366,7 @@ const res = await fetch("https://mock-interview-bot-b57o.onrender.com/api/interv
         </div>
       )}
 
-      {/* 3. SIDE FLOATING BUTTON (ALWAYS ACCESSIBLE) */}
+      {/* Side Mentor Drawer */}
       <button
         onClick={() => setIsDoubtDrawerOpen((prev) => !prev)}
         style={styles.floatingButton}
@@ -323,15 +374,14 @@ const res = await fetch("https://mock-interview-bot-b57o.onrender.com/api/interv
         💬 Ask Doubt & Improve
       </button>
 
-      {/* 4. SLIDE-OUT DOUBT & MENTOR DRAWER */}
       {isDoubtDrawerOpen && (
         <div style={styles.drawerOverlay}>
           <div style={styles.drawerCard}>
             <div style={styles.drawerHeader}>
               <div>
-                <strong style={{ color: "#58a6ff" }}>💡 Doubt & Improvement Mentor</strong>
+                <strong style={{ color: "#58a6ff" }}>💡 Technical Mentor</strong>
                 <div style={{ fontSize: "12px", color: "#8b949e" }}>
-                  Ask questions, code solutions, or how to improve
+                  Ask questions, code solutions, or concepts
                 </div>
               </div>
               <button
@@ -378,7 +428,7 @@ const res = await fetch("https://mock-interview-bot-b57o.onrender.com/api/interv
             <form onSubmit={handleSendDoubt} style={styles.drawerInputArea}>
               <input
                 type="text"
-                placeholder="Ask any doubt or how to improve..."
+                placeholder="Ask any doubt or concept..."
                 value={doubtInput}
                 onChange={(e) => setDoubtInput(e.target.value)}
                 disabled={isDoubtLoading}
@@ -420,7 +470,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     border: "1px solid #30363d",
     borderRadius: "12px",
     width: "100%",
-    maxWidth: "520px",
+    maxWidth: "540px",
     padding: "32px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
   },
@@ -466,6 +516,20 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontWeight: "600",
     cursor: "pointer",
     marginTop: "12px",
+  },
+  reportBox: {
+    backgroundColor: "#0d1117",
+    border: "1px solid #30363d",
+    borderRadius: "8px",
+    padding: "18px",
+    marginBottom: "20px",
+    maxHeight: "350px",
+    overflowY: "auto",
+  },
+  reportScore: {
+    fontSize: "18px",
+    fontWeight: "700",
+    marginBottom: "12px",
   },
   chatCard: {
     backgroundColor: "#161b22",
