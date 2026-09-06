@@ -10,7 +10,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 2. Serve Static Frontend Files (HTML, CSS, JS) from frontend folder
+// 2. Serve Static Frontend Files from frontend folder
 app.use(express.static(path.join(__dirname, "../frontend")));
 
 // 3. Initialize Gemini AI
@@ -23,13 +23,45 @@ const genAI = new GoogleGenerativeAI(apiKey || "");
 // 4. API Endpoint for Interview & Mentor Chat
 app.post("/api/interview", async (req, res) => {
   try {
-    const { prompt, history } = req.body;
+    const { prompt, history, topic, difficulty } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: "A prompt is required." });
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const currentTopic = topic || "the selected technical topic";
+    const currentDifficulty = difficulty || "Intermediate";
+
+    // System instructions enforcing strict technical evaluation & topic lock
+    const systemInstruction = `
+You are a rigorous, professional technical interviewer.
+Current Session Details:
+- Target Domain: ${currentTopic}
+- Difficulty: ${currentDifficulty}
+
+RULES YOU MUST FOLLOW:
+1. TOPIC RELEVANCE:
+   Every question you ask MUST strictly belong to "${currentTopic}".
+   If the topic is "DSA (Data Structures & Algorithms)", ask ONLY about data structures (arrays, trees, graphs, heaps, hash tables) and algorithms (sorting, recursion, dynamic programming, two pointers, time/space complexity). NEVER ask about Redis, Node.js, CSS, or system design unless specified by the topic.
+
+2. ACCURATE EVALUATION (NO FALSE PRAISE):
+   Carefully examine the candidate's response:
+   - If the candidate types gibberish, random letters (e.g., "SEDFG'['", "asdfgh"), empty text, or completely unrelated remarks:
+     DO NOT say "Well stated", "Good attempt", or "Evaluation noted".
+     Directly say: "Your response is invalid and does not address the question." and score it 0.
+   - If the candidate says "I don't know":
+     Directly note that no answer was provided and proceed.
+   - If the candidate provides a real technical answer:
+     Provide 1-2 sentences of honest, specific critique (state what was accurate and what was missing).
+
+3. TRANSITION TO NEXT QUESTION:
+   After your brief critique, clearly present the next question for the candidate.
+`;
+
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      systemInstruction: systemInstruction,
+    });
 
     let contextText = "";
     if (Array.isArray(history) && history.length > 0) {
@@ -59,7 +91,7 @@ app.post("/api/interview", async (req, res) => {
 });
 
 // 5. Fallback Route: Serve index.html for any other route
-app.get("*", (req, res) => {
+app.get("(.*)", (req, res) => {
   res.sendFile(path.join(__dirname, "../frontend", "index.html"));
 });
 
