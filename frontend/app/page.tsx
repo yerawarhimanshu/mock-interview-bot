@@ -53,7 +53,7 @@ export default function MockInterviewApp() {
     const initPrompt = `Start a technical mock interview on the topic: ${topic}. Difficulty: ${difficulty}. Directly ask Question 1 of ${totalQuestions} without intro fluff.`;
 
     try {
-      const res = await fetch("http://localhost:5000/api/interview", {
+      const res = await fetch("https://mock-interview-bot-b57o.onrender.com/api/interview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: initPrompt }),
@@ -99,7 +99,7 @@ export default function MockInterviewApp() {
     const payloadPrompt = `Topic: ${topic}. Difficulty: ${difficulty}. Candidate Answer: "${userText}". Evaluate in 2 concise sentences, then give Question ${currentQuestionIndex + 1} of ${totalQuestions}.`;
 
     try {
-      const res = await fetch("http://localhost:5000/api/interview", {
+      const res = await fetch("https://mock-interview-bot-b57o.onrender.com/api/interview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -151,7 +151,8 @@ Keep your response structured, practical, and under 150 words.
     `.trim();
 
     try {
-      const res = await fetch("http://localhost:5000/api/interview", {
+     // Change line 154 to:
+const res = await fetch("https://mock-interview-bot-b57o.onrender.com/api/interview",{
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: mentorPrompt }),
