@@ -324,7 +324,6 @@ export default function MockInterviewApp() {
             )}
             <div ref={chatEndRef} />
           </div>
-
           <form onSubmit={handleSendMessage} style={styles.inputArea}>
             <input
               type="text"

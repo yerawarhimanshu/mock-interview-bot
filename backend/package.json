@@ -1,7 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "AI Mock Interview Backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,6 +9,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "type": "commonjs",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
     "@google/genai": "^2.17.1",
@@ -16,6 +17,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "groq-sdk": "^0.8.0"
+    "firebase-admin": "^14.5.0",
+    "groq-sdk": "^1.6.0"
   }
 }

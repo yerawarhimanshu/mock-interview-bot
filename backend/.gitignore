@@ -1,9 +1,25 @@
-node_modules/
+# Environment variables and secrets
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Next.js build files
+.next/
+**/.next/
+
+# Backup folder
+frontend-backup/
+
+# Build output
 dist/
 build/
-.next/
-.DS_Store
-Thumbs.db
+
+# Logs
+npm-debug.log*
