@@ -239,7 +239,7 @@ export default function AuthForm() {
         .field label { display: block; margin-bottom: 8px; color: #435143; font-size: 13px; font-weight: 600; }
         .field input {
           width: 100%; height: 50px; padding: 0 15px; border-radius: 12px;
-          border: 1px solid #303b50; outline: none; background: #0b1221; color: #243027;
+          border: 1px solid #303b50; outline: none; background: #0b1221; color: #ffffff; caret-color: #ffffff;
           font: inherit; font-size: 14px; transition: border .2s, box-shadow .2s;
         }
         .field input::placeholder { color: #879283; }
@@ -411,3 +411,4 @@ export default function AuthForm() {
     </main>
   );
 }
+
