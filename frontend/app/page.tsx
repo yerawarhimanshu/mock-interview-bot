@@ -1,6 +1,10 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import AuthForm from "../components/AuthForm";
+import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import { auth, db } from "./firebase";
+import { addDoc, collection, serverTimestamp, Timestamp } from "firebase/firestore";
 
 interface Message {
   role: "bot" | "user";
@@ -15,11 +19,59 @@ interface FinalReport {
 const BACKEND_URL = "https://mock-interview-bot-b57o.onrender.com/api/interview";
 
 export default function MockInterviewApp() {
-  const [topic, setTopic] = useState("DSA (Data Structures & Algorithms)");
+  const [selectedType, setSelectedType] = useState("Technical Interview");
+  const typeToTopic: Record<string, string> = {
+    "Technical Interview": "DSA (Data Structures & Algorithms)",
+    "HR Interview": "HR and common interview questions",
+    "Coding Interview": "Coding and problem solving",
+    "Behavioral Interview": "Behavioral and situational interview questions",
+  };
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [interviewStartedAt, setInterviewStartedAt] = useState<Date | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const interviewStartedAtRef = useRef<Date | null>(null);
+
+
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setAuthLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const requestedType = new URLSearchParams(window.location.search).get("type");
+    if (requestedType && typeToTopic[requestedType]) setSelectedType(requestedType);
+  }, []);
+
+  const [topic, setTopic] = useState(typeToTopic["Technical Interview"]);
+  useEffect(() => {
+    setTopic(typeToTopic[selectedType] || typeToTopic["Technical Interview"]);
+  }, [selectedType]);
+
   const [difficulty, setDifficulty] = useState("Junior / Entry-Level");
   const [totalQuestions, setTotalQuestions] = useState(3);
   const [isInterviewStarted, setIsInterviewStarted] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
+
+  // Update the visible timer once per second while an interview is active.
+  useEffect(() => {
+    if (!isInterviewStarted || isFinished || !interviewStartedAt) return;
+
+    const updateElapsed = () => {
+      setElapsedSeconds(
+        Math.max(0, Math.floor((Date.now() - interviewStartedAt.getTime()) / 1000))
+      );
+    };
+
+    updateElapsed();
+    const timerId = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timerId);
+  }, [isInterviewStarted, isFinished, interviewStartedAt]);
+
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [userInput, setUserInput] = useState("");
@@ -32,7 +84,7 @@ export default function MockInterviewApp() {
     {
       role: "bot",
       content:
-        "Hi! I am your Technical Mentor. Have any doubts, need code examples, or want tips on how to improve? Ask me anything!",
+        "Hi! I am your Interview Practice Mentor. Have any doubts or want tips to improve your answers? Ask me anything!",
     },
   ]);
   const [doubtInput, setDoubtInput] = useState("");
@@ -49,6 +101,58 @@ export default function MockInterviewApp() {
     doubtEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [doubtMessages, isDoubtLoading, isDoubtDrawerOpen]);
 
+  const saveInterviewResult = async (finalScore: number, summary: string, conversation: Message[]) => {
+    if (!currentUser) return;
+
+    try {
+      // Capture the finish time once so the saved timestamps and duration agree.
+      const completedAt = new Date();
+      const startedAt = interviewStartedAtRef.current ?? interviewStartedAt;
+      const durationSeconds = startedAt
+        ? Math.max(0, Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000))
+        : 0;
+
+      await addDoc(collection(db, "users", currentUser.uid, "interviews"), {
+        userId: currentUser.uid,
+        interviewType: selectedType,
+        topic,
+        difficulty,
+        totalQuestions,
+        score: finalScore,
+        summary,
+        conversation,
+        completed: true,
+        createdAt: Timestamp.fromDate(completedAt),
+        completedAt: Timestamp.fromDate(completedAt),
+        startedAt: startedAt ? Timestamp.fromDate(startedAt) : null,
+        durationSeconds,
+      });
+      console.log("Interview result and actual duration saved successfully.");
+    } catch (error) {
+      console.error("Failed to save interview result to Firestore:", error);
+      alert("Your interview finished, but its result could not be saved. Please check your internet connection and Firestore rules.");
+    }
+  };
+
+  const extractScore = (text: string): number => {
+    // Accept common AI report formats, but only read a number explicitly tied to a score.
+    const patterns = [
+      /overall\s+score\s*[:=-]?\s*(\d{1,3})\s*(?:\/\s*100|out of 100|%)/i,
+      /score\s*(?:out of 100|\/\s*100)\s*[:=-]?\s*(\d{1,3})/i,
+      /overall\s+score\s*[:=-]?\s*(\d{1,3})\b/i,
+      /final\s+score\s*[:=-]?\s*(\d{1,3})\s*(?:\/\s*100|out of 100|%)/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const parsed = Number(match[1]);
+        if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 100) return parsed;
+      }
+    }
+    return 0;
+  };
+
   const isNonsense = (str: string) => {
     const clean = str.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
     if (clean.length < 5) return true;
@@ -57,13 +161,17 @@ export default function MockInterviewApp() {
   };
 
   const handleStartInterview = async () => {
+    const startedAt = new Date();
+    interviewStartedAtRef.current = startedAt;
+    setInterviewStartedAt(startedAt);
+    setElapsedSeconds(0);
     setIsInterviewStarted(true);
     setIsFinished(false);
     setIsLoading(true);
     setCurrentQuestionIndex(1);
     setReport(null);
 
-    const initPrompt = `Start a technical mock interview on the topic: ${topic}. Difficulty: ${difficulty}. Directly ask Question 1 of ${totalQuestions} without introductory fluff.`;
+    const initPrompt = `Start a ${selectedType} on the topic: ${topic}. Difficulty: ${difficulty}. Directly ask Question 1 of ${totalQuestions} without introductory fluff.`;
 
     try {
       const res = await fetch(BACKEND_URL, {
@@ -118,8 +226,9 @@ export default function MockInterviewApp() {
       ? `Topic: ${topic}. Difficulty: ${difficulty}. Candidate Final Answer: "${userText}". 
          The interview is complete. Provide a strict evaluation report:
          1. Turn evaluation (1-2 sentences).
-         2. Overall score out of 100 based on technical accuracy.
-         3. Top 2 actionable areas for improvement.`
+         2. Give one overall technical-accuracy score from 0 to 100. Use this exact format on its own line: Overall score: NN/100 (replace NN with an integer from 0 to 100; do not use any other scale).
+         3. Top 2 actionable areas for improvement.
+         If the answer is nonsense or does not answer the question, give a very low score appropriate to the answer. Never output a score above 100.`
       : `Topic: ${topic}. Difficulty: ${difficulty}. Candidate Answer: "${userText}". 
          Evaluate this answer honestly in 1-2 sentences (point out inaccuracies). Then provide Question ${currentQuestionIndex + 1} of ${totalQuestions} strictly relevant to ${topic}.`;
 
@@ -141,11 +250,13 @@ export default function MockInterviewApp() {
       setMessages((prev) => [...prev, { role: "bot", content: botResponse }]);
 
       if (isLastTurn) {
+        const finalScore = extractScore(botResponse);
         setIsFinished(true);
         setReport({
-          score: 80,
+          score: finalScore,
           summary: botResponse,
         });
+        await saveInterviewResult(finalScore, botResponse, [...updatedMessages, { role: "bot", content: botResponse }]);
       } else {
         setCurrentQuestionIndex((prev) => prev + 1);
       }
@@ -156,7 +267,7 @@ export default function MockInterviewApp() {
       setMessages((prev) => [...prev, { role: "bot", content: fallback }]);
       if (isLastTurn) {
         setIsFinished(true);
-        setReport({ score: 75, summary: fallback });
+        setReport({ score: 0, summary: `${fallback}\n\nA score was not saved because the AI evaluation request failed.` });
       } else {
         setCurrentQuestionIndex((prev) => prev + 1);
       }
@@ -201,20 +312,88 @@ export default function MockInterviewApp() {
   const handleRestart = () => {
     setIsInterviewStarted(false);
     setIsFinished(false);
+    setInterviewStartedAt(null);
+    interviewStartedAtRef.current = null;
+    setElapsedSeconds(0);
     setMessages([]);
     setUserInput("");
     setCurrentQuestionIndex(1);
     setReport(null);
   };
 
+  const formatElapsedTime = (totalSeconds: number) => {
+    const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
+    const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+    return `${minutes}:${seconds}`;
+  };
+
+  if (authLoading) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          backgroundColor: "#f5faf6",
+          color: "#234b36",
+          fontFamily: "Inter, system-ui, sans-serif",
+        }}
+      >
+        Checking your sign-in...
+      </main>
+    );
+  }
+
+  if (!currentUser) {
+    return <AuthForm />;
+  }
+
   return (
     <div style={styles.container}>
+      <button
+        type="button"
+        onClick={() => { window.location.href = "/home"; }}
+        style={{
+          position: "fixed",
+          top: "16px",
+          left: "16px",
+          zIndex: 200,
+          padding: "9px 14px",
+          border: "1px solid #dce8df",
+          borderRadius: "8px",
+          backgroundColor: "#edf5ef",
+          color: "#234b36",
+          cursor: "pointer",
+        }}
+      >
+        ← Home
+      </button>
+      <button
+        type="button"
+        onClick={() => signOut(auth)}
+        style={{
+          position: "fixed",
+          top: "16px",
+          right: "16px",
+          zIndex: 200,
+          padding: "9px 14px",
+          border: "1px solid #dce8df",
+          borderRadius: "8px",
+          backgroundColor: "#edf5ef",
+          color: "#234b36",
+          cursor: "pointer",
+        }}
+      >
+        Sign out
+      </button>
       {!isInterviewStarted ? (
         <div style={styles.setupCard}>
-          <h1 style={styles.setupTitle}>Technical Mock Interviewer</h1>
+          <h1 style={styles.setupTitle}>{selectedType}</h1>
           <p style={styles.setupSubtitle}>
-            Configure your technical domain and criteria before starting the session.
+            Choose your topic, difficulty, and question count before starting.
           </p>
+
+
 
           <div style={styles.formGroup}>
             <label style={styles.label}>Select Topic</label>
@@ -228,6 +407,9 @@ export default function MockInterviewApp() {
               <option value="System Design & Architecture">System Design & Architecture</option>
               <option value="React & Frontend Engineering">React & Frontend Engineering</option>
               <option value="Node.js & Backend Architecture">Node.js & Backend Architecture</option>
+              <option value="HR and common interview questions">HR and Common Interview Questions</option>
+              <option value="Coding and problem solving">Coding and Problem Solving</option>
+              <option value="Behavioral and situational interview questions">Behavioral and Situational Interview Questions</option>
             </select>
           </div>
 
@@ -265,10 +447,18 @@ export default function MockInterviewApp() {
         <div style={styles.setupCard}>
           <h1 style={{ ...styles.setupTitle, color: "#3fb950" }}>Interview Evaluation Report</h1>
           <p style={styles.setupSubtitle}>Your session is finished. Here is your performance overview:</p>
-          <div style={styles.reportBox}>
-            <div style={{ color: "#c9d1d9", fontSize: "14px", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>
+          <div style={{ ...styles.reportBox, maxHeight: "none" }}>
+            <div style={{ marginBottom: "14px", fontSize: "28px", fontWeight: 700, color: report && report.score >= 70 ? "#3fb950" : report && report.score >= 40 ? "#d29922" : "#f85149" }}>
+              Score: {report?.score ?? 0}/100
+            </div>
+            <div style={{ color: "#45614f", fontSize: "14px", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>
               {report?.summary}
             </div>
+            {report?.score === 0 && (
+              <p style={{ color: "#d29922", fontSize: "12px", marginTop: "12px" }}>
+                The AI report did not contain a score in a recognized format, so 0 is shown. Check that the report includes “Overall score: NN/100”.
+              </p>
+            )}
           </div>
           <button onClick={handleRestart} style={styles.startButton}>
             Start New Round
@@ -284,6 +474,13 @@ export default function MockInterviewApp() {
             <div style={styles.headerRight}>
               <span style={styles.questionCounter}>
                 Question {Math.min(currentQuestionIndex, totalQuestions)} / {totalQuestions}
+              </span>
+              <span
+                aria-label="Interview elapsed time"
+                title="Elapsed interview time"
+                style={{ fontSize: "12px", color: "#6b7f72", whiteSpace: "nowrap" }}
+              >
+                ⏱ {formatElapsedTime(elapsedSeconds)}
               </span>
               <button onClick={handleRestart} style={styles.restartBtn}>
                 Restart
@@ -359,8 +556,8 @@ export default function MockInterviewApp() {
           <div style={styles.drawerCard}>
             <div style={styles.drawerHeader}>
               <div>
-                <strong style={{ color: "#58a6ff" }}>💡 Doubt & Improvement Mentor</strong>
-                <div style={{ fontSize: "12px", color: "#8b949e" }}>
+                <strong style={{ color: "#347a50" }}>💡 Doubt & Improvement Mentor</strong>
+                <div style={{ fontSize: "12px", color: "#6b7f72" }}>
                   Ask questions, code solutions, or how to improve
                 </div>
               </div>
@@ -419,7 +616,7 @@ export default function MockInterviewApp() {
                 disabled={isDoubtLoading || !doubtInput.trim()}
                 style={{
                   ...styles.sendBtn,
-                  backgroundColor: "#1f6feb",
+                  backgroundColor: "#3b8056",
                   opacity: isDoubtLoading || !doubtInput.trim() ? 0.6 : 1,
                 }}
               >
@@ -436,8 +633,8 @@ export default function MockInterviewApp() {
 const styles: { [key: string]: React.CSSProperties } = {
   container: {
     minHeight: "100vh",
-    backgroundColor: "#0d1117",
-    color: "#f0f6fc",
+    backgroundColor: "#f5faf6",
+    color: "#234b36",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -446,8 +643,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     position: "relative",
   },
   setupCard: {
-    backgroundColor: "#161b22",
-    border: "1px solid #30363d",
+    backgroundColor: "#ffffff",
+    border: "1px solid #dce8df",
     borderRadius: "12px",
     width: "100%",
     maxWidth: "540px",
@@ -458,11 +655,11 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: "22px",
     fontWeight: "600",
     marginBottom: "8px",
-    color: "#58a6ff",
+    color: "#347a50",
   },
   setupSubtitle: {
     fontSize: "14px",
-    color: "#8b949e",
+    color: "#6b7f72",
     marginBottom: "24px",
   },
   formGroup: {
@@ -472,23 +669,23 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: "block",
     fontSize: "13px",
     fontWeight: "500",
-    color: "#c9d1d9",
+    color: "#45614f",
     marginBottom: "8px",
   },
   select: {
     width: "100%",
     padding: "12px",
-    backgroundColor: "#0d1117",
-    border: "1px solid #30363d",
+    backgroundColor: "#f5faf6",
+    border: "1px solid #dce8df",
     borderRadius: "8px",
-    color: "#f0f6fc",
+    color: "#234b36",
     fontSize: "14px",
     outline: "none",
   },
   startButton: {
     width: "100%",
     padding: "14px",
-    backgroundColor: "#238636",
+    backgroundColor: "#347a50",
     color: "#ffffff",
     border: "none",
     borderRadius: "8px",
@@ -498,8 +695,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     marginTop: "12px",
   },
   reportBox: {
-    backgroundColor: "#0d1117",
-    border: "1px solid #30363d",
+    backgroundColor: "#f5faf6",
+    border: "1px solid #dce8df",
     borderRadius: "8px",
     padding: "18px",
     marginBottom: "20px",
@@ -507,8 +704,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     overflowY: "auto",
   },
   chatCard: {
-    backgroundColor: "#161b22",
-    border: "1px solid #30363d",
+    backgroundColor: "#ffffff",
+    border: "1px solid #dce8df",
     borderRadius: "12px",
     width: "100%",
     maxWidth: "880px",
@@ -519,20 +716,20 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   header: {
     padding: "16px 24px",
-    borderBottom: "1px solid #30363d",
+    borderBottom: "1px solid #dce8df",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#161b22",
+    backgroundColor: "#ffffff",
   },
   headerTopic: {
     fontSize: "14px",
     fontWeight: "600",
-    color: "#58a6ff",
+    color: "#347a50",
   },
   headerLevel: {
     fontSize: "13px",
-    color: "#8b949e",
+    color: "#6b7f72",
   },
   headerRight: {
     display: "flex",
@@ -541,14 +738,14 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   questionCounter: {
     fontSize: "13px",
-    color: "#8b949e",
+    color: "#6b7f72",
   },
   restartBtn: {
     padding: "6px 12px",
-    backgroundColor: "#21262d",
-    border: "1px solid #30363d",
+    backgroundColor: "#edf5ef",
+    border: "1px solid #dce8df",
     borderRadius: "6px",
-    color: "#f0f6fc",
+    color: "#234b36",
     cursor: "pointer",
     fontSize: "12px",
   },
@@ -572,17 +769,17 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: "14px",
   },
   botBubble: {
-    backgroundColor: "#21262d",
-    border: "1px solid #30363d",
-    color: "#f0f6fc",
+    backgroundColor: "#edf5ef",
+    border: "1px solid #dce8df",
+    color: "#234b36",
   },
   mentorBubble: {
-    backgroundColor: "#1c2128",
-    border: "1px solid #388bfd",
-    color: "#f0f6fc",
+    backgroundColor: "#eef7f0",
+    border: "1px solid #8bbd99",
+    color: "#234b36",
   },
   userBubble: {
-    backgroundColor: "#1f6feb",
+    backgroundColor: "#3b8056",
     color: "#ffffff",
   },
   senderTag: {
@@ -597,28 +794,28 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   loadingDots: {
     fontStyle: "italic",
-    color: "#8b949e",
+    color: "#6b7f72",
   },
   inputArea: {
     padding: "16px 24px",
-    borderTop: "1px solid #30363d",
+    borderTop: "1px solid #dce8df",
     display: "flex",
     gap: "12px",
-    backgroundColor: "#161b22",
+    backgroundColor: "#ffffff",
   },
   textInput: {
     flex: 1,
     padding: "12px 16px",
-    backgroundColor: "#0d1117",
-    border: "1px solid #30363d",
+    backgroundColor: "#f5faf6",
+    border: "1px solid #dce8df",
     borderRadius: "8px",
-    color: "#f0f6fc",
+    color: "#234b36",
     fontSize: "14px",
     outline: "none",
   },
   sendBtn: {
     padding: "12px 24px",
-    backgroundColor: "#238636",
+    backgroundColor: "#347a50",
     color: "#ffffff",
     border: "none",
     borderRadius: "8px",
@@ -631,14 +828,14 @@ const styles: { [key: string]: React.CSSProperties } = {
     bottom: "24px",
     right: "24px",
     padding: "12px 20px",
-    backgroundColor: "#1f6feb",
+    backgroundColor: "#3b8056",
     color: "#ffffff",
     border: "none",
     borderRadius: "30px",
     fontWeight: "600",
     fontSize: "14px",
     cursor: "pointer",
-    boxShadow: "0 6px 18px rgba(31, 111, 235, 0.4)",
+    boxShadow: "0 6px 18px rgba(52, 122, 80, 0.25)",
     zIndex: 99,
   },
   drawerOverlay: {
@@ -648,8 +845,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     bottom: 0,
     width: "420px",
     maxWidth: "100vw",
-    backgroundColor: "#161b22",
-    borderLeft: "1px solid #30363d",
+    backgroundColor: "#ffffff",
+    borderLeft: "1px solid #dce8df",
     boxShadow: "-8px 0 24px rgba(0,0,0,0.5)",
     zIndex: 100,
     display: "flex",
@@ -662,7 +859,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   drawerHeader: {
     padding: "16px 20px",
-    borderBottom: "1px solid #30363d",
+    borderBottom: "1px solid #dce8df",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -670,7 +867,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   drawerCloseBtn: {
     background: "transparent",
     border: "none",
-    color: "#8b949e",
+    color: "#6b7f72",
     fontSize: "18px",
     cursor: "pointer",
   },
@@ -684,7 +881,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   drawerInputArea: {
     padding: "16px 20px",
-    borderTop: "1px solid #30363d",
+    borderTop: "1px solid #dce8df",
     display: "flex",
     gap: "8px",
   },
