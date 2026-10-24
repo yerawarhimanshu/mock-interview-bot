@@ -1,0 +1,21 @@
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCjL0tW63pS5BBKIPQpZ8H6gP22jeA4Vuo",
+  authDomain: "mock-interview-bot-44680.firebaseapp.com",
+  projectId: "mock-interview-bot-44680",
+  storageBucket: "mock-interview-bot-44680.firebasestorage.app",
+  messagingSenderId: "131972341853",
+  appId: "1:131972341853:web:7ebd236b861cc3139d6db4",
+  measurementId: "G-YBPCHKQKQZ"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);

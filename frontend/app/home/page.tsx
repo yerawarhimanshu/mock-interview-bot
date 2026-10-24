@@ -89,9 +89,9 @@ export default function PrepwiseHomePage() {
   return (
     <main style={s.page}>
       <header style={s.header}>
-        <Link href="/" style={s.logo}><span style={s.logoMark}>P</span><span>prepwise</span></Link>
+        <Link href="/home" style={s.logo}><span style={s.logoMark}>P</span><span>prepwise</span></Link>
         <nav style={s.nav} aria-label="Main navigation">
-          <Link href="/" style={{ ...s.navLink, ...s.navActive }}>Home</Link>
+          <Link href="/home" style={{ ...s.navLink, ...s.navActive }}>Home</Link>
           <Link href="/dashboard" style={s.navLink}>Dashboard</Link>
           <Link href="/public-profile" style={s.navLink}>Profile</Link>
         </nav>
@@ -142,45 +142,45 @@ export default function PrepwiseHomePage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100vh", background: "#f7f8fa", color: "#17202b", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" },
-  loading: { minHeight: "100vh", display: "grid", placeItems: "center", background: "#f7f8fa", color: "#17202b", fontFamily: "system-ui, sans-serif" },
+  page: { minHeight: "100vh", background: "#f5faf6", color: "#18382a", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" },
+  loading: { minHeight: "100vh", display: "grid", placeItems: "center", background: "#f5faf6", color: "#18382a", fontFamily: "system-ui, sans-serif" },
   header: { height: 72, padding: "0 clamp(20px, 6vw, 88px)", display: "flex", alignItems: "center", gap: 36, background: "#fff", borderBottom: "1px solid #e7eaf0", position: "relative" },
   logo: { display: "flex", alignItems: "center", gap: 10, color: "#17202b", textDecoration: "none", fontSize: 21, fontWeight: 750, letterSpacing: "-0.8px", whiteSpace: "nowrap" },
-  logoMark: { display: "grid", placeItems: "center", width: 31, height: 31, borderRadius: 9, background: "#263d66", color: "white", fontSize: 17, fontWeight: 800, letterSpacing: 0 },
+  logoMark: { display: "grid", placeItems: "center", width: 31, height: 31, borderRadius: 9, background: "#34794f", color: "white", fontSize: 17, fontWeight: 800, letterSpacing: 0 },
   nav: { display: "flex", alignItems: "center", gap: 28, flex: 1, height: "100%" },
-  navLink: { display: "flex", alignItems: "center", height: "100%", color: "#697586", textDecoration: "none", fontSize: 13, fontWeight: 550, borderBottom: "2px solid transparent", paddingTop: 2 },
-  navActive: { color: "#263d66", borderBottomColor: "#263d66" },
+  navLink: { display: "flex", alignItems: "center", height: "100%", color: "#65796b", textDecoration: "none", fontSize: 13, fontWeight: 550, borderBottom: "2px solid transparent", paddingTop: 2 },
+  navActive: { color: "#34794f", borderBottomColor: "#34794f" },
   accountArea: { display: "flex", alignItems: "center", gap: 12, position: "relative" },
   userEmail: { maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#667085", fontSize: 12 },
-  avatarButton: { width: 35, height: 35, borderRadius: "50%", border: "1px solid #d8deea", background: "#edf1f8", color: "#263d66", fontWeight: 750, cursor: "pointer" },
+  avatarButton: { width: 35, height: 35, borderRadius: "50%", border: "1px solid #d8deea", background: "#eaf4ec", color: "#28623e", fontWeight: 750, cursor: "pointer" },
   menu: { position: "absolute", top: 47, right: 0, width: 190, padding: 8, background: "#fff", border: "1px solid #e1e6ee", borderRadius: 10, boxShadow: "0 12px 30px rgba(25, 37, 58, .12)", zIndex: 10 },
   menuEmail: { padding: "10px 9px", fontSize: 11, color: "#788396", borderBottom: "1px solid #edf0f4", overflowWrap: "anywhere" },
   menuLink: { display: "block", padding: "11px 9px", color: "#253247", textDecoration: "none", fontSize: 13 },
   signOut: { display: "block", width: "100%", textAlign: "left", padding: "11px 9px", border: 0, borderTop: "1px solid #edf0f4", background: "white", color: "#b42318", fontSize: 13, cursor: "pointer" },
   content: { maxWidth: 1180, margin: "0 auto", padding: "0 clamp(20px, 5vw, 54px)" },
   intro: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 30, padding: "58px 0 46px", borderBottom: "1px solid #e4e8ef", flexWrap: "wrap" },
-  overline: { color: "#687995", fontSize: 10, fontWeight: 750, letterSpacing: 1.8, marginBottom: 13 },
-  title: { margin: 0, fontSize: "clamp(29px, 4vw, 42px)", letterSpacing: "-1.8px", lineHeight: 1.12, fontWeight: 700, color: "#172638" },
-  subtitle: { margin: "13px 0 0", color: "#697586", fontSize: 14, lineHeight: 1.7 },
+  overline: { color: "#34794f", fontSize: 10, fontWeight: 750, letterSpacing: 1.8, marginBottom: 13 },
+  title: { margin: 0, fontSize: "clamp(29px, 4vw, 42px)", letterSpacing: "-1.8px", lineHeight: 1.12, fontWeight: 700, color: "#18382a" },
+  subtitle: { margin: "13px 0 0", color: "#65796b", fontSize: 14, lineHeight: 1.7 },
   streakBox: { display: "flex", alignItems: "center", gap: 19, padding: "17px 21px", background: "#fff", border: "1px solid #e1e6ee", borderRadius: 12, boxShadow: "0 3px 10px rgba(30, 45, 70, .025)" },
-  streakIcon: { width: 38, height: 38, display: "grid", placeItems: "center", borderRadius: 10, background: "#edf2f9", color: "#315487", fontSize: 23, fontWeight: 500 },
+  streakIcon: { width: 38, height: 38, display: "grid", placeItems: "center", borderRadius: 10, background: "#eaf4ec", color: "#34794f", fontSize: 23, fontWeight: 500 },
   streakCaption: { color: "#8a94a5", fontSize: 9, fontWeight: 750, letterSpacing: 1.1, marginBottom: 6, whiteSpace: "nowrap" },
-  streakNumber: { fontSize: 23, lineHeight: 1, fontWeight: 700, letterSpacing: "-0.8px", color: "#203452", whiteSpace: "nowrap" },
+  streakNumber: { fontSize: 23, lineHeight: 1, fontWeight: 700, letterSpacing: "-0.8px", color: "#245638", whiteSpace: "nowrap" },
   streakDivider: { width: 1, height: 37, background: "#e4e8ef", margin: "0 2px" },
   section: { padding: "38px 0 54px" },
   sectionTop: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, marginBottom: 22 },
-  sectionTitle: { margin: 0, fontSize: 21, letterSpacing: "-0.6px", fontWeight: 700, color: "#202c3d" },
+  sectionTitle: { margin: 0, fontSize: 21, letterSpacing: "-0.6px", fontWeight: 700, color: "#18382a" },
   sectionSub: { margin: "7px 0 0", color: "#7a8595", fontSize: 13 },
-  count: { padding: "7px 10px", border: "1px solid #dfe5ed", borderRadius: 6, color: "#738096", fontSize: 9, fontWeight: 750, letterSpacing: 1, whiteSpace: "nowrap" },
+  count: { padding: "7px 10px", border: "1px solid #dfe5ed", borderRadius: 6, color: "#34794f", fontSize: 9, fontWeight: 750, letterSpacing: 1, whiteSpace: "nowrap" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 235px), 1fr))", gap: 16 },
   card: { minHeight: 246, display: "flex", flexDirection: "column", padding: 23, background: "#fff", border: "1px solid #e1e6ee", borderRadius: 11, color: "inherit", textDecoration: "none", boxShadow: "0 2px 7px rgba(25, 37, 58, .025)", transition: "border-color .15s ease, transform .15s ease, box-shadow .15s ease" },
   cardTop: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 23 },
-  cardIcon: { display: "grid", placeItems: "center", minWidth: 43, height: 43, padding: "0 6px", borderRadius: 9, background: "#f0f3f8", border: "1px solid #e8edf4", color: "#2c4b78", fontSize: 15, fontWeight: 750, letterSpacing: "-0.5px" },
-  cardIndex: { color: "#b3bdca", fontSize: 11, fontWeight: 700, letterSpacing: 1 },
-  cardTag: { color: "#7787a0", fontSize: 9, fontWeight: 750, letterSpacing: 1.1, marginBottom: 9 },
-  cardTitle: { margin: 0, fontSize: 17, fontWeight: 700, letterSpacing: "-0.35px", color: "#202c3d" },
-  cardDescription: { margin: "9px 0 22px", color: "#768194", fontSize: 12, lineHeight: 1.7, flex: 1 },
-  cardBottom: { display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 14, borderTop: "1px solid #edf0f4", color: "#314f7b", fontSize: 11, fontWeight: 700 },
+  cardIcon: { display: "grid", placeItems: "center", minWidth: 43, height: 43, padding: "0 6px", borderRadius: 9, background: "#eaf4ec", border: "1px solid #dce9df", color: "#28623e", fontSize: 15, fontWeight: 750, letterSpacing: "-0.5px" },
+  cardIndex: { color: "#a2b6a7", fontSize: 11, fontWeight: 700, letterSpacing: 1 },
+  cardTag: { color: "#34794f", fontSize: 9, fontWeight: 750, letterSpacing: 1.1, marginBottom: 9 },
+  cardTitle: { margin: 0, fontSize: 17, fontWeight: 700, letterSpacing: "-0.35px", color: "#18382a" },
+  cardDescription: { margin: "9px 0 22px", color: "#65796b", fontSize: 12, lineHeight: 1.7, flex: 1 },
+  cardBottom: { display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 14, borderTop: "1px solid #edf0f4", color: "#34794f", fontSize: 11, fontWeight: 700 },
   arrow: { fontSize: 18, fontWeight: 400 },
   footer: { display: "flex", justifyContent: "space-between", gap: 15, padding: "18px 0 25px", borderTop: "1px solid #e4e8ef", color: "#98a1af", fontSize: 10 },
 };
